@@ -19,8 +19,8 @@ void enableRawMode(){
   atexit(disableRawMode);
 
   // modifying the terminal attributes by hand
-  // performing bit-wise NOT on ECHO and then bit-wise AND with c_lflag 
-  // and then assigning it to c_lflag
+  // performing bit-wise NOT on ECHO and then bit-wise AND with c_lflag and then assigning it to c_lflag
+  // ICANON - program quits as soon as we type 'q'
   struct termios raw = orig_termios;
   raw.c_lflag &= ~(ECHO | ICANON);
 
