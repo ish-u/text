@@ -1,19 +1,35 @@
+/*** includes ***/
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
 
-// terminal attributes
+/*** data ***/
 struct termios orig_termios;
 
+
+/*** terminal ***/
+// To Handle Errors
+void die(const char *s) {
+  perror(s);
+  exit(1);
+}
+
 // To Disable Raw Mode during Exit
-void disableRawMode() { tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios); }
+void disableRawMode() {
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1) {
+    die("tcgetattr");
+  }
+}
 
 // To Turn Off the Echo in Terminal
 void enableRawMode() {
   // get the current attributes of terminal in struct 'orig_termios'
-  tcgetattr(STDIN_FILENO, &orig_termios);
+  if (tcgetattr(STDIN_FILENO, &orig_termios)) {
+    die("tcsetattr");
+  }
 
   // restoring original terminal atrributes on quit
   atexit(disableRawMode);
@@ -33,20 +49,34 @@ void enableRawMode() {
   raw.c_lflag |= (CS8);
   raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
 
+  // read timeout
+  // c_cc = Control Characters
+  raw.c_cc[VMIN] = 0;
+  raw.c_cc[VTIME] = 1;
+
   // setting the modified attributes to terminal
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
+/*** init ***/
+
 int main() {
   enableRawMode();
 
-  char c;
-  while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q') {
+  while (1) {
+    char c = '\0';
+    // failing C Library function sets errno to some value to indicate failure
+    if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) {
+      die("read");
+    }
     if (iscntrl(c)) {
       printf("%d\r\n", c);
     } else {
       printf("%d ('%c')\r\n", c, c);
     }
+
+    if (c == 'q')
+      break;
   }
   return 0;
 }
