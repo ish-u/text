@@ -6,9 +6,13 @@
 #include <termios.h>
 #include <unistd.h>
 
+/*** defines ***/
+// All Ctrl + k operations results in 0x[ASCII_CODE_IN_HEX] & 0x1f
+// Ctrl + Q = 0x17 => 0b01110001 & 0b00011111 = 0b00010001 = 0x17
+#define CTRL_KEY(k) ((k)&0x1f)
+
 /*** data ***/
 struct termios orig_termios;
-
 
 /*** terminal ***/
 // To Handle Errors
@@ -42,6 +46,7 @@ void enableRawMode() {
   // ICRNL - makes Ctrl+M print 13 and also make enter read as 13
   // OPOST - disbale \r \n
   // BRKINT, INPCK, ISTRIP, and CS8 - Other Miscll. flags for raw mode
+  // Ctrl + V - Still Pasting Clipboard Contents
   struct termios raw = orig_termios;
   raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
   raw.c_iflag &= ~(ICRNL | IXON);
@@ -58,25 +63,36 @@ void enableRawMode() {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
-/*** init ***/
+// Wait for an Key Press
+char editorReadKey() {
+  int nread;
+  char c;
+  // failing C Library function sets errno to some value to indicate failure
+  while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
+    if (nread == -1 && errno != EAGAIN)
+      die("read");
+  }
+  return c;
+}
 
+/*** input ***/
+// Handle the KeyPress
+void editorProcessKeypresses() {
+  char c = editorReadKey();
+
+  switch (c) {
+  case CTRL_KEY('q'):
+    exit(0);
+    break;
+  }
+}
+
+/*** init ***/
 int main() {
   enableRawMode();
 
   while (1) {
-    char c = '\0';
-    // failing C Library function sets errno to some value to indicate failure
-    if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) {
-      die("read");
-    }
-    if (iscntrl(c)) {
-      printf("%d\r\n", c);
-    } else {
-      printf("%d ('%c')\r\n", c, c);
-    }
-
-    if (c == 'q')
-      break;
+    editorProcessKeypresses();
   }
   return 0;
 }
