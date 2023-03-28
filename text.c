@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -148,6 +149,32 @@ int getWindowSize(int *rows, int *cols) {
   }
 }
 
+/*** append buffer ***/
+struct abuf {
+  char *b;
+  int len;
+};
+
+#define ABUF_INIT {NULL, 0};
+
+// append a string 's' to append-buffer 'abuf'
+void abAppend(struct abuf *ab, const char *s, int len) {
+  // allocate memory to hold the new string
+  char *new = realloc(ab->b, ab->len + len);
+
+  if (new == NULL)
+    return;
+  // copy the string 's' after string original string
+  memcpy(&new[ab->len], s, len);
+
+  // assigning new string and len to 'abuf'
+  ab->b = new;
+  ab->len += len;
+}
+
+// to deallocate memory used by 'abuf'
+void abFree(struct abuf *ab) { free(ab->b); }
+
 /*** input ***/
 // Handle the KeyPress
 void editorProcessKeypresses() {
@@ -165,13 +192,13 @@ void editorProcessKeypresses() {
 
 /*** output ***/
 // Add Rows to Standard Output
-void editorDrawRows() {
+void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
-    write(STDOUT_FILENO, "~", 1);
+    abAppend(ab, "~", 1);
 
     if (y < E.screenrows - 1) {
-      write(STDOUT_FILENO, "\r\n", 2);
+      abAppend(ab, "\r\n", 2);
     }
   }
 }
@@ -187,14 +214,19 @@ void editorRefreshScreen() {
   // 1;1 Arguments are seperated by ; <esc>[2J - Clear Whole Screen <esc>[1J -
   // Clear Screen Upto Cursor <esc>[0J - Clear Screen From Cursor till end
 
+  struct abuf ab = ABUF_INIT;
+  
   // Clearing the Screen - 4byte Long
-  write(STDOUT_FILENO, "\x1b[2J", 4);
+  abAppend(&ab, "\x1b[2J", 4);
   // Repositioning the Cursor - 3byte Long
-  write(STDOUT_FILENO, "\x1b[H", 3);
+  abAppend(&ab, "\x1b[H", 3);
 
   // Drawing Rows
-  editorDrawRows();
-  write(STDOUT_FILENO, "\x1b[H", 3);
+  editorDrawRows(&ab);
+  abAppend(&ab, "\x1b[H", 3);
+
+  write(STDIN_FILENO, ab.b, ab.len);
+  abFree(&ab);
 }
 
 /*** init ***/
