@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 /*** defines ***/
+#define TEXT_VERSION "0.0.1"
 // All Ctrl + k operations results in 0x[ASCII_CODE_IN_HEX] & 0x1f
 // Ctrl + Q = 0x17 => 0b01110001 & 0b00011111 = 0b00010001 = 0x17
 #define CTRL_KEY(k) ((k)&0x1f)
@@ -195,8 +196,27 @@ void editorProcessKeypresses() {
 void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
-    abAppend(ab, "~", 1);
-
+    // Show the Welcome Message
+    if (y == E.screenrows / 3) {
+      char welcome[80];
+      int welcomelen = snprintf(welcome, sizeof(welcome),
+                                "Text Editor -- version %s", TEXT_VERSION);
+      if (welcomelen > E.screencols)
+        welcomelen = E.screencols;
+      // Centering the Message
+      int padding = (E.screencols - welcomelen) / 2;
+      if (padding) {
+        abAppend(ab, "~", 1);
+        padding--;
+      }
+      while (padding--)
+        abAppend(ab, " ", 1);
+      abAppend(ab, welcome, welcomelen);
+    } else {
+      abAppend(ab, "~", 1);
+    }
+    // EraseCurrent Line -[0k => 0 to erase part of line after the cursor
+    abAppend(ab, "\x1b[K", 3);
     if (y < E.screenrows - 1) {
       abAppend(ab, "\r\n", 2);
     }
@@ -211,19 +231,24 @@ void editorRefreshScreen() {
   // Escape Squence Starts with - '\x1b['
   // J - Erases the Terminal, 2 is the Argument for this Escape Sequence
   // H - Cursor Position - takes 2 Arguments => RowNo. and ColNo. => Default
+  // h - Set Mode
+  // l - Reset Mode
   // 1;1 Arguments are seperated by ; <esc>[2J - Clear Whole Screen <esc>[1J -
   // Clear Screen Upto Cursor <esc>[0J - Clear Screen From Cursor till end
 
   struct abuf ab = ABUF_INIT;
-  
-  // Clearing the Screen - 4byte Long
-  abAppend(&ab, "\x1b[2J", 4);
-  // Repositioning the Cursor - 3byte Long
+
+  // Hide Cursor
+  abAppend(&ab, "\x1b[?25l", 6);
+  // Repositioning the Cursor
   abAppend(&ab, "\x1b[H", 3);
 
   // Drawing Rows
   editorDrawRows(&ab);
+
   abAppend(&ab, "\x1b[H", 3);
+  // Show Cursor
+  abAppend(&ab, "\x1b[?25h", 6);
 
   write(STDIN_FILENO, ab.b, ab.len);
   abFree(&ab);
@@ -231,7 +256,7 @@ void editorRefreshScreen() {
 
 /*** init ***/
 void initEditor() {
-  if (getWindowSize(&E.screenrows, &E.screenrows) == -1)
+  if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     die("getWindowSize");
 }
 
