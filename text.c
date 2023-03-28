@@ -12,12 +12,17 @@
 #define CTRL_KEY(k) ((k)&0x1f)
 
 /*** data ***/
-struct termios orig_termios;
+struct editorConfig {
+  struct termios orig_termios;
+};
+
+struct editorConfig E;
+
 
 /*** terminal ***/
 // To Handle Errors
 void die(const char *s) {
-  // Clearing the Screen and Repositioning Cursor on Exit 
+  // Clearing the Screen and Repositioning Cursor on Exit
   write(STDOUT_FILENO, "\x1b[2J", 4);
   write(STDOUT_FILENO, "\x1b[H", 3);
 
@@ -27,7 +32,7 @@ void die(const char *s) {
 
 // To Disable Raw Mode during Exit
 void disableRawMode() {
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1) {
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1) {
     die("tcgetattr");
   }
 }
@@ -35,7 +40,7 @@ void disableRawMode() {
 // To Turn Off the Echo in Terminal
 void enableRawMode() {
   // get the current attributes of terminal in struct 'orig_termios'
-  if (tcgetattr(STDIN_FILENO, &orig_termios)) {
+  if (tcgetattr(STDIN_FILENO, &E.orig_termios)) {
     die("tcsetattr");
   }
 
@@ -51,7 +56,7 @@ void enableRawMode() {
   // OPOST - disbale \r \n
   // BRKINT, INPCK, ISTRIP, and CS8 - Other Miscll. flags for raw mode
   // Ctrl + V - Still Pasting Clipboard Contents
-  struct termios raw = orig_termios;
+  struct termios raw = E.orig_termios;
   raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
   raw.c_iflag &= ~(ICRNL | IXON);
   raw.c_oflag &= ~(OPOST);
@@ -86,7 +91,7 @@ void editorProcessKeypresses() {
 
   switch (c) {
   case CTRL_KEY('q'):
-    // Clearing the Screen and Repositioning Cursor on Exit 
+    // Clearing the Screen and Repositioning Cursor on Exit
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
     exit(0);
@@ -95,6 +100,15 @@ void editorProcessKeypresses() {
 }
 
 /*** output ***/
+// Add Rows to Standard Output
+void editorDrawRows() {
+  int y;
+  for (y = 0; y < 24; y++) {
+    write(STDOUT_FILENO, "~\r\n", 3);
+  }
+}
+
+// Clear/Refresh Screen + Reposition Cursor
 void editorRefreshScreen() {
   // Ref : https://vt100.net/docs/vt100-ug/chapter3.html#CUP
   // \x1b - Escape Character - 27
@@ -111,7 +125,12 @@ void editorRefreshScreen() {
   write(STDOUT_FILENO, "\x1b[2J", 4);
   // Repositioning the Cursor - 3byte Long
   write(STDOUT_FILENO, "\x1b[H", 3);
+
+  // Drawing Rows
+  editorDrawRows();
+  write(STDOUT_FILENO, "\x1b[H", 3);
 }
+
 
 /*** init ***/
 int main() {
