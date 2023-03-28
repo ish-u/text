@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -13,11 +14,12 @@
 
 /*** data ***/
 struct editorConfig {
+  int screenrows;
+  int screencols;
   struct termios orig_termios;
 };
 
 struct editorConfig E;
-
 
 /*** terminal ***/
 // To Handle Errors
@@ -84,6 +86,68 @@ char editorReadKey() {
   return c;
 }
 
+// get the cursor position for finding window size if ioctl fails
+int getCursorPosition(int *rows, int *cols) {
+
+  // For parsing relevant information from the result of n command
+  char buf[32];
+  unsigned int i = 0;
+
+  // Ref : https://vt100.net/docs/vt100-ug/chapter3.html#DSR
+  // using the n command we get the cursor position report that contains
+  // the relevant information for us to find the Window Size
+  if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4)
+    return -1;
+
+  // Reading the result of the n command/escape_seq in buf
+  while (i < sizeof(buf) - 1) {
+    if (read(STDIN_FILENO, &buf[i], 1) != 1)
+      break;
+    if (buf[1] == 'R')
+      break;
+    i++;
+  }
+  buf[i] = '\0';
+
+  if (buf[0] != '\x1b' || buf[1] != '[')
+    return -1;
+  if (sscanf(&buf[2], "%d;%d", rows, cols) != 2)
+    return -1;
+
+  return 0;
+
+  // printf("\r\n");
+  // char c;
+  // while (read(STDIN_FILENO, &c, 1) == 1) {
+  //   if (iscntrl(c)) {
+  //     printf("%d\r\n", c);
+  //   } else {
+  //     printf("%d ('%c')\r\n", c, c);
+  //   }
+  // }
+  // editorReadKey();
+  // return  0;
+}
+
+// get the rows and col of the terminal
+int getWindowSize(int *rows, int *cols) {
+  struct winsize ws;
+
+  // TIOCGWINSZ - Terminal IOCtl(IOCtl - Input/Output Control) Get Window Size
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    // C - Cursor Forward - move to right
+    // B - Cursor Down - moves cursor down
+    // We Supply the 999 as the argumet for these Escape Sequences
+    if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12)
+      return -1;
+    return getCursorPosition(rows, cols);
+  } else {
+    *cols = ws.ws_col;
+    *rows = ws.ws_row;
+    return 0;
+  }
+}
+
 /*** input ***/
 // Handle the KeyPress
 void editorProcessKeypresses() {
@@ -103,8 +167,12 @@ void editorProcessKeypresses() {
 // Add Rows to Standard Output
 void editorDrawRows() {
   int y;
-  for (y = 0; y < 24; y++) {
-    write(STDOUT_FILENO, "~\r\n", 3);
+  for (y = 0; y < E.screenrows; y++) {
+    write(STDOUT_FILENO, "~", 1);
+
+    if (y < E.screenrows - 1) {
+      write(STDOUT_FILENO, "\r\n", 2);
+    }
   }
 }
 
@@ -115,11 +183,9 @@ void editorRefreshScreen() {
   // [2J - Reamingin 3 Bytes
   // Escape Squence Starts with - '\x1b['
   // J - Erases the Terminal, 2 is the Argument for this Escape Sequence
-  // H - Cursor Position - takes 2 Arguments => RowNo. and ColNo. => Default 1;1
-  // Arguments are seperated by ;
-  // <esc>[2J - Clear Whole Screen
-  // <esc>[1J - Clear Screen Upto Cursor
-  // <esc>[0J - Clear Screen From Cursor till end
+  // H - Cursor Position - takes 2 Arguments => RowNo. and ColNo. => Default
+  // 1;1 Arguments are seperated by ; <esc>[2J - Clear Whole Screen <esc>[1J -
+  // Clear Screen Upto Cursor <esc>[0J - Clear Screen From Cursor till end
 
   // Clearing the Screen - 4byte Long
   write(STDOUT_FILENO, "\x1b[2J", 4);
@@ -131,10 +197,15 @@ void editorRefreshScreen() {
   write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
-
 /*** init ***/
+void initEditor() {
+  if (getWindowSize(&E.screenrows, &E.screenrows) == -1)
+    die("getWindowSize");
+}
+
 int main() {
   enableRawMode();
+  initEditor();
 
   while (1) {
     editorRefreshScreen();
