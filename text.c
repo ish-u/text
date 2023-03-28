@@ -17,6 +17,10 @@ struct termios orig_termios;
 /*** terminal ***/
 // To Handle Errors
 void die(const char *s) {
+  // Clearing the Screen and Repositioning Cursor on Exit 
+  write(STDOUT_FILENO, "\x1b[2J", 4);
+  write(STDOUT_FILENO, "\x1b[H", 3);
+
   perror(s);
   exit(1);
 }
@@ -82,9 +86,31 @@ void editorProcessKeypresses() {
 
   switch (c) {
   case CTRL_KEY('q'):
+    // Clearing the Screen and Repositioning Cursor on Exit 
+    write(STDOUT_FILENO, "\x1b[2J", 4);
+    write(STDOUT_FILENO, "\x1b[H", 3);
     exit(0);
     break;
   }
+}
+
+/*** output ***/
+void editorRefreshScreen() {
+  // Ref : https://vt100.net/docs/vt100-ug/chapter3.html#CUP
+  // \x1b - Escape Character - 27
+  // [2J - Reamingin 3 Bytes
+  // Escape Squence Starts with - '\x1b['
+  // J - Erases the Terminal, 2 is the Argument for this Escape Sequence
+  // H - Cursor Position - takes 2 Arguments => RowNo. and ColNo. => Default 1;1
+  // Arguments are seperated by ;
+  // <esc>[2J - Clear Whole Screen
+  // <esc>[1J - Clear Screen Upto Cursor
+  // <esc>[0J - Clear Screen From Cursor till end
+
+  // Clearing the Screen - 4byte Long
+  write(STDOUT_FILENO, "\x1b[2J", 4);
+  // Repositioning the Cursor - 3byte Long
+  write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
 /*** init ***/
@@ -92,6 +118,7 @@ int main() {
   enableRawMode();
 
   while (1) {
+    editorRefreshScreen();
     editorProcessKeypresses();
   }
   return 0;
