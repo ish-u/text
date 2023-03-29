@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -27,10 +28,18 @@ enum editorKey {
 };
 
 /*** data ***/
+// Editor Row - Store the Line of Text
+typedef struct erow {
+  int size;    // Size of Line
+  char *chars; // Pointer to Character Data of Line
+} erow;
+
 struct editorConfig {
   int cx, cy;
   int screenrows;
   int screencols;
+  int numrows;
+  erow row;
   struct termios orig_termios;
 };
 
@@ -220,6 +229,22 @@ int getWindowSize(int *rows, int *cols) {
   }
 }
 
+/*** file i/o ***/
+void editorOpen() {
+  char *line = "Hello world!";
+  ssize_t linelen = 13;
+
+  // Setting the Size of Line in a Row
+  E.row.size = linelen;
+  // Allocating Memory for Character of the Line in a Row
+  E.row.chars = malloc(linelen + 1);
+  // Copying Characters from line to Line in a Row
+  memcpy(E.row.chars, line, linelen);
+  // Adding the Ending chracter to the copied Characters
+  E.row.chars[linelen] = '\0';
+  E.numrows = 1;
+}
+
 /*** append buffer ***/
 struct abuf {
   char *b;
@@ -310,24 +335,30 @@ void editorProcessKeypresses() {
 void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
-    // Show the Welcome Message
-    if (y == E.screenrows / 3) {
-      char welcome[80];
-      int welcomelen = snprintf(welcome, sizeof(welcome),
-                                "Text Editor -- version %s", TEXT_VERSION);
-      if (welcomelen > E.screencols)
-        welcomelen = E.screencols;
-      // Centering the Message
-      int padding = (E.screencols - welcomelen) / 2;
-      if (padding) {
+    if (y >= E.numrows) {
+      // Show the Welcome Message
+      if (y == E.screenrows / 3) {
+        char welcome[80];
+        int welcomelen = snprintf(welcome, sizeof(welcome),
+                                  "Text Editor -- version %s", TEXT_VERSION);
+        if (welcomelen > E.screencols)
+          welcomelen = E.screencols;
+        // Centering the Message
+        int padding = (E.screencols - welcomelen) / 2;
+        if (padding) {
+          abAppend(ab, "~", 1);
+          padding--;
+        }
+        while (padding--)
+          abAppend(ab, " ", 1);
+        abAppend(ab, welcome, welcomelen);
+      } else {
         abAppend(ab, "~", 1);
-        padding--;
       }
-      while (padding--)
-        abAppend(ab, " ", 1);
-      abAppend(ab, welcome, welcomelen);
     } else {
-      abAppend(ab, "~", 1);
+      int len = E.row.size;
+      if(len > E.screencols) len = E.screencols;
+      abAppend(ab, E.row.chars, len);
     }
     // EraseCurrent Line -[0k => 0 to erase part of line after the cursor
     abAppend(ab, "\x1b[K", 3);
@@ -376,6 +407,7 @@ void editorRefreshScreen() {
 void initEditor() {
   E.cx = 0;
   E.cy = 0;
+  E.numrows = 0;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     die("getWindowSize");
@@ -384,6 +416,7 @@ void initEditor() {
 int main() {
   enableRawMode();
   initEditor();
+  editorOpen();
 
   while (1) {
     editorRefreshScreen();
