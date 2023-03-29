@@ -19,6 +19,7 @@ enum editorKey {
   ARROW_RIGHT,
   ARROW_UP,
   ARROW_DOWN,
+  DEL_KEY,
   HOME_KEY,
   END_KEY,
   PAGE_UP,
@@ -112,6 +113,7 @@ int editorReadKey() {
       // PageUp - <esc>[5~ , PageDown - <esc>[6~
       // Home Key - <esc>[1~, <esc>[7~, <esc>[H, or <esc>OH
       // End Key - <esc>[4~, <esc>[8~, <esc>[F, or <esc>OF
+      // Delete Key - <esc>[3~
       if (seq[1] >= '0' && seq[1] <= '9') {
         if (read(STDIN_FILENO, &seq[2], 1) != 1)
           return '\x1b';
@@ -119,6 +121,8 @@ int editorReadKey() {
           switch (seq[1]) {
           case '1':
             return HOME_KEY;
+          case '3':
+            return DEL_KEY;
           case '4':
             return END_KEY;
           case '5':
@@ -280,11 +284,11 @@ void editorProcessKeypresses() {
     exit(0);
     break;
   case HOME_KEY:
-      E.cx = 0;
-      break;
+    E.cx = 0;
+    break;
   case END_KEY:
-      E.cx = E.screencols - 1;
-      break;
+    E.cx = E.screencols - 1;
+    break;
   case PAGE_UP:
   case PAGE_DOWN: {
     int times = E.screenrows;
