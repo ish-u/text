@@ -19,6 +19,8 @@ enum editorKey {
   ARROW_RIGHT,
   ARROW_UP,
   ARROW_DOWN,
+  HOME_KEY,
+  END_KEY,
   PAGE_UP,
   PAGE_DOWN
 };
@@ -108,15 +110,25 @@ int editorReadKey() {
 
     if (seq[0] == '[') {
       // PageUp - <esc>[5~ , PageDown - <esc>[6~
+      // Home Key - <esc>[1~, <esc>[7~, <esc>[H, or <esc>OH
+      // End Key - <esc>[4~, <esc>[8~, <esc>[F, or <esc>OF
       if (seq[1] >= '0' && seq[1] <= '9') {
         if (read(STDIN_FILENO, &seq[2], 1) != 1)
           return '\x1b';
         if (seq[2] == '~') {
           switch (seq[1]) {
+          case '1':
+            return HOME_KEY;
+          case '4':
+            return END_KEY;
           case '5':
             return PAGE_UP;
           case '6':
             return PAGE_DOWN;
+          case '7':
+            return HOME_KEY;
+          case '8':
+            return END_KEY;
           }
         }
       } else {
@@ -129,6 +141,10 @@ int editorReadKey() {
           return ARROW_RIGHT;
         case 'D':
           return ARROW_LEFT;
+        case 'H':
+          return HOME_KEY;
+        case 'F':
+          return END_KEY;
         }
       }
     }
@@ -263,6 +279,12 @@ void editorProcessKeypresses() {
     write(STDOUT_FILENO, "\x1b[H", 3);
     exit(0);
     break;
+  case HOME_KEY:
+      E.cx = 0;
+      break;
+  case END_KEY:
+      E.cx = E.screencols - 1;
+      break;
   case PAGE_UP:
   case PAGE_DOWN: {
     int times = E.screenrows;
