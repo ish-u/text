@@ -1,4 +1,8 @@
 /*** includes ***/
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
@@ -230,19 +234,32 @@ int getWindowSize(int *rows, int *cols) {
 }
 
 /*** file i/o ***/
-void editorOpen() {
-  char *line = "Hello world!";
-  ssize_t linelen = 13;
+void editorOpen(char *filename) {
+  FILE *fp = fopen(filename, "r");
+  if (!fp)
+    die("fopen");
 
-  // Setting the Size of Line in a Row
-  E.row.size = linelen;
-  // Allocating Memory for Character of the Line in a Row
-  E.row.chars = malloc(linelen + 1);
-  // Copying Characters from line to Line in a Row
-  memcpy(E.row.chars, line, linelen);
-  // Adding the Ending chracter to the copied Characters
-  E.row.chars[linelen] = '\0';
-  E.numrows = 1;
+  char *line = NULL;
+  size_t linecap = 0;
+  ssize_t linelen;
+  linelen = getline(&line, &linecap, fp);
+  if (linelen != 1) {
+    while (linelen > 0 &&
+           (line[linelen - 1] == '\n' || line[linelen - 1] == '\r')) {
+      linelen--;
+    }
+    // Setting the Size of Line in a Row
+    E.row.size = linelen;
+    // Allocating Memory for Character of the Line in a Row
+    E.row.chars = malloc(linelen + 1);
+    // Copying Characters from line to Line in a Row
+    memcpy(E.row.chars, line, linelen);
+    // Adding the Ending chracter to the copied Characters
+    E.row.chars[linelen] = '\0';
+    E.numrows = 1;
+  }
+  free(line);
+  fclose(fp);
 }
 
 /*** append buffer ***/
@@ -337,7 +354,8 @@ void editorDrawRows(struct abuf *ab) {
   for (y = 0; y < E.screenrows; y++) {
     if (y >= E.numrows) {
       // Show the Welcome Message
-      if (y == E.screenrows / 3) {
+      // Only show when open without a file
+      if (E.numrows == 0 && y == E.screenrows / 3) {
         char welcome[80];
         int welcomelen = snprintf(welcome, sizeof(welcome),
                                   "Text Editor -- version %s", TEXT_VERSION);
@@ -357,7 +375,8 @@ void editorDrawRows(struct abuf *ab) {
       }
     } else {
       int len = E.row.size;
-      if(len > E.screencols) len = E.screencols;
+      if (len > E.screencols)
+        len = E.screencols;
       abAppend(ab, E.row.chars, len);
     }
     // EraseCurrent Line -[0k => 0 to erase part of line after the cursor
@@ -413,11 +432,12 @@ void initEditor() {
     die("getWindowSize");
 }
 
-int main() {
+int main(int argc, char *argv[]) {
   enableRawMode();
   initEditor();
-  editorOpen();
-
+  if (argc >= 2) {
+    editorOpen(argv[1]);
+  }
   while (1) {
     editorRefreshScreen();
     editorProcessKeypresses();
