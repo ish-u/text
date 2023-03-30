@@ -43,7 +43,7 @@ struct editorConfig {
   int screenrows;
   int screencols;
   int numrows;
-  erow row;
+  erow *row; // Array of erow where each erow stores a line read from a file
   struct termios orig_termios;
 };
 
@@ -233,6 +233,25 @@ int getWindowSize(int *rows, int *cols) {
   }
 }
 
+/*** row operations ***/
+void editorAppendRow(char *s, size_t len) {
+  // Reallocate(Resize Memory Block) to accomadate a new erow in E.row array
+  E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+
+  // index of the new element of E.row array
+  int at = E.numrows;
+  // Setting the Size of Line in a Row
+  E.row[at].size = len;
+  // Allocating Memory for Character of the Line in a Row
+  E.row[at].chars = malloc(len + 1);
+  // Copying Characters from line to Line in a Row
+  memcpy(E.row[at].chars, s, len);
+  // Adding the Ending chracter to the copied Characters
+  E.row[at].chars[len] = '\0';
+  // Incrementing the Row Count
+  E.numrows++;
+}
+
 /*** file i/o ***/
 void editorOpen(char *filename) {
   FILE *fp = fopen(filename, "r");
@@ -242,21 +261,14 @@ void editorOpen(char *filename) {
   char *line = NULL;
   size_t linecap = 0;
   ssize_t linelen;
-  linelen = getline(&line, &linecap, fp);
-  if (linelen != 1) {
+  // Reading the File Line-by-Line and Appending Each line as erow 
+  // to E.row array
+  while ((linelen = getline(&line, &linecap, fp)) != -1) {
     while (linelen > 0 &&
            (line[linelen - 1] == '\n' || line[linelen - 1] == '\r')) {
       linelen--;
     }
-    // Setting the Size of Line in a Row
-    E.row.size = linelen;
-    // Allocating Memory for Character of the Line in a Row
-    E.row.chars = malloc(linelen + 1);
-    // Copying Characters from line to Line in a Row
-    memcpy(E.row.chars, line, linelen);
-    // Adding the Ending chracter to the copied Characters
-    E.row.chars[linelen] = '\0';
-    E.numrows = 1;
+    editorAppendRow(line, linelen);
   }
   free(line);
   fclose(fp);
@@ -353,8 +365,7 @@ void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
     if (y >= E.numrows) {
-      // Show the Welcome Message
-      // Only show when open without a file
+      // Show the Welcome Message - Only show when open without a file
       if (E.numrows == 0 && y == E.screenrows / 3) {
         char welcome[80];
         int welcomelen = snprintf(welcome, sizeof(welcome),
@@ -374,10 +385,10 @@ void editorDrawRows(struct abuf *ab) {
         abAppend(ab, "~", 1);
       }
     } else {
-      int len = E.row.size;
+      int len = E.row[y].size;
       if (len > E.screencols)
         len = E.screencols;
-      abAppend(ab, E.row.chars, len);
+      abAppend(ab, E.row[y].chars, len);
     }
     // EraseCurrent Line -[0k => 0 to erase part of line after the cursor
     abAppend(ab, "\x1b[K", 3);
@@ -427,6 +438,7 @@ void initEditor() {
   E.cx = 0;
   E.cy = 0;
   E.numrows = 0;
+  E.row = 0;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     die("getWindowSize");
