@@ -40,6 +40,7 @@ typedef struct erow {
 
 struct editorConfig {
   int cx, cy;
+  int rowoff;
   int screenrows;
   int screencols;
   int numrows;
@@ -261,7 +262,7 @@ void editorOpen(char *filename) {
   char *line = NULL;
   size_t linecap = 0;
   ssize_t linelen;
-  // Reading the File Line-by-Line and Appending Each line as erow 
+  // Reading the File Line-by-Line and Appending Each line as erow
   // to E.row array
   while ((linelen = getline(&line, &linecap, fp)) != -1) {
     while (linelen > 0 &&
@@ -320,7 +321,7 @@ void editorMoveCursor(int key) {
     }
     break;
   case ARROW_DOWN:
-    if (E.cy != E.screenrows - 1) {
+    if (E.cy < E.numrows) {
       E.cy++;
     }
     break;
@@ -360,11 +361,22 @@ void editorProcessKeypresses() {
 }
 
 /*** output ***/
+// For Vertical Scrolling
+void editorScroll() {
+  if (E.cy < E.rowoff) {
+    E.rowoff = E.cy;
+  }
+  if (E.cy >= E.rowoff + E.screenrows) {
+    E.rowoff = E.cy - E.screenrows + 1;
+  }
+}
+//
 // Add Rows to Standard Output
 void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
-    if (y >= E.numrows) {
+    int filerow = y + E.rowoff;
+    if (filerow >= E.numrows) {
       // Show the Welcome Message - Only show when open without a file
       if (E.numrows == 0 && y == E.screenrows / 3) {
         char welcome[80];
@@ -385,10 +397,10 @@ void editorDrawRows(struct abuf *ab) {
         abAppend(ab, "~", 1);
       }
     } else {
-      int len = E.row[y].size;
+      int len = E.row[filerow].size;
       if (len > E.screencols)
         len = E.screencols;
-      abAppend(ab, E.row[y].chars, len);
+      abAppend(ab, E.row[filerow].chars, len);
     }
     // EraseCurrent Line -[0k => 0 to erase part of line after the cursor
     abAppend(ab, "\x1b[K", 3);
@@ -411,6 +423,9 @@ void editorRefreshScreen() {
   // 1;1 Arguments are seperated by ; <esc>[2J - Clear Whole Screen <esc>[1J -
   // Clear Screen Upto Cursor <esc>[0J - Clear Screen From Cursor till end
 
+  // for Scrolling
+  editorScroll();
+
   struct abuf ab = ABUF_INIT;
 
   // Hide Cursor
@@ -423,7 +438,7 @@ void editorRefreshScreen() {
 
   // Cursor Motion
   char buf[32];
-  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
   abAppend(&ab, buf, strlen(buf));
 
   // Show Cursor
@@ -438,6 +453,7 @@ void initEditor() {
   E.cx = 0;
   E.cy = 0;
   E.numrows = 0;
+  E.rowoff = 0;
   E.row = 0;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
