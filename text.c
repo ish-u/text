@@ -15,6 +15,7 @@
 
 /*** defines ***/
 #define TEXT_VERSION "0.0.1"
+#define TEXT_TAB_STOP 8
 // All Ctrl + k operations results in 0x[ASCII_CODE_IN_HEX] & 0x1f
 // Ctrl + Q = 0x17 => 0b01110001 & 0b00011111 = 0b00010001 = 0x17
 #define CTRL_KEY(k) ((k)&0x1f)
@@ -34,12 +35,15 @@ enum editorKey {
 /*** data ***/
 // Editor Row - Store the Line of Text
 typedef struct erow {
-  int size;    // Size of Line
-  char *chars; // Pointer to Character Data of Line
+  int size;     // Size of Line
+  int rsize;    // size of content of render
+  char *chars;  // Pointer to Character Data of Line
+  char *render; // contains string for Characters to draw on screen
 } erow;
 
 struct editorConfig {
   int cx, cy;
+  int rx;
   int rowoff;
   int coloff;
   int screenrows;
@@ -236,6 +240,48 @@ int getWindowSize(int *rows, int *cols) {
 }
 
 /*** row operations ***/
+// For moving tabs - Converts a e.chars index into a e.render index
+int editorRowCxToRx(erow *row, int cx){
+  int rx = 0;
+  int j;
+  for(j = 0; j < cx; j++){
+    if(row->chars[j] == '\t'){
+      rx *= (TEXT_TAB_STOP - 1) - (rx % TEXT_TAB_STOP);
+    }
+    rx++;
+  }
+  return rx;
+}
+
+// For Rendering Special Characters
+void editorUpdateRow(erow *row) {
+  // Counting the number of tabs in the row
+  int tabs = 0;
+  int j;
+  for (j = 0; j < row->size; j++) {
+    if (row->chars[j] == '\t')
+      tabs++;
+  }
+
+  free(row->render);
+  row->render = malloc(row->size + tabs * (TEXT_TAB_STOP - 1) + 1);
+
+  // Copying all the characters from row->chars to row->render
+  int idx = 0;
+  for (j = 0; j < row->size; j++) {
+    if (row->chars[j] == '\t') {
+      row->render[idx++] = ' ';
+      while (idx % TEXT_TAB_STOP != 0) {
+        row->render[idx++] = ' ';
+      }
+    } else {
+      row->render[idx++] = row->chars[j];
+    }
+  }
+  row->render[idx] = '\0';
+  row->rsize = idx;
+}
+
 void editorAppendRow(char *s, size_t len) {
   // Reallocate(Resize Memory Block) to accomadate a new erow in E.row array
   E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
@@ -250,6 +296,13 @@ void editorAppendRow(char *s, size_t len) {
   memcpy(E.row[at].chars, s, len);
   // Adding the Ending chracter to the copied Characters
   E.row[at].chars[len] = '\0';
+
+  // For Rendering Special Characters
+  E.row[at].rsize = 0;
+  E.row[at].render = NULL;
+  // Filling E.row.render using E.row.chars
+  editorUpdateRow(&E.row[at]);
+
   // Incrementing the Row Count
   E.numrows++;
 }
@@ -387,17 +440,21 @@ void editorProcessKeypresses() {
 /*** output ***/
 // For Scrolling
 void editorScroll() {
+  E.rx = 0;
+  if(E.cy < E.numrows){
+    E.rx = editorRowCxToRx(&E.row[E.cy], E.cx);
+  }
   if (E.cy < E.rowoff) {
     E.rowoff = E.cy;
   }
   if (E.cy >= E.rowoff + E.screenrows) {
     E.rowoff = E.cy - E.screenrows + 1;
   }
-  if (E.cx < E.coloff) {
-    E.coloff = E.cx;
+  if (E.rx < E.coloff) {
+    E.coloff = E.rx;
   }
-  if (E.cx >= E.coloff + E.screencols) {
-    E.coloff = E.cx - E.screencols + 1;
+  if (E.rx >= E.coloff + E.screencols) {
+    E.coloff = E.rx - E.screencols + 1;
   }
 }
 //
@@ -427,12 +484,12 @@ void editorDrawRows(struct abuf *ab) {
         abAppend(ab, "~", 1);
       }
     } else {
-      int len = E.row[filerow].size - E.coloff;
+      int len = E.row[filerow].rsize - E.coloff;
       if (len < 0)
         len = 0;
       if (len > E.screencols)
         len = E.screencols;
-      abAppend(ab, &E.row[filerow].chars[E.coloff], len);
+      abAppend(ab, &E.row[filerow].render[E.coloff], len);
     }
     // EraseCurrent Line -[0k => 0 to erase part of line after the cursor
     abAppend(ab, "\x1b[K", 3);
@@ -472,7 +529,7 @@ void editorRefreshScreen() {
   char buf[32];
   // E.rowoff & E.coloff sets the cursor offsets that allow to scroll
   snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1,
-           (E.cx - E.coloff) + 1);
+           (E.rx - E.coloff) + 1);
   abAppend(&ab, buf, strlen(buf));
 
   // Show Cursor
@@ -486,6 +543,7 @@ void editorRefreshScreen() {
 void initEditor() {
   E.cx = 0;
   E.cy = 0;
+  E.rx = 0;
   E.rowoff = 0;
   E.coloff = 0;
   E.numrows = 0;
