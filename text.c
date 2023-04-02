@@ -419,10 +419,13 @@ void editorProcessKeypresses() {
     E.cx = 0;
     break;
   case END_KEY:
-    E.cx = E.screencols - 1;
+    if (E.cy < E.numrows) {
+      E.cx = E.row[E.cy].size;
+    }
     break;
   case PAGE_UP:
   case PAGE_DOWN: {
+    // Scroll within Page
     if (c == PAGE_UP) {
       E.cy = E.rowoff;
     } else if (c == PAGE_DOWN) {
