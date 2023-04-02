@@ -50,6 +50,7 @@ struct editorConfig {
   int screencols;
   int numrows;
   erow *row; // Array of erow where each erow stores a line read from a file
+  char *filename;
   struct termios orig_termios;
 };
 
@@ -309,6 +310,10 @@ void editorAppendRow(char *s, size_t len) {
 
 /*** file i/o ***/
 void editorOpen(char *filename) {
+  // Storing File Name in editor config
+  free(E.filename);
+  E.filename = strdup(filename);
+
   FILE *fp = fopen(filename, "r");
   if (!fp)
     die("fopen");
@@ -500,10 +505,41 @@ void editorDrawRows(struct abuf *ab) {
     }
     // EraseCurrent Line -[0k => 0 to erase part of line after the cursor
     abAppend(ab, "\x1b[K", 3);
-    if (y < E.screenrows - 1) {
-      abAppend(ab, "\r\n", 2);
+    abAppend(ab, "\r\n", 2);
+  }
+}
+
+// Draw Status Line
+void editorDrawStatusBar(struct abuf *ab) {
+  // <esc>[7m - To Switch to Inverted Colours
+  // m command - https://vt100.net/docs/vt100-ug/chapter3.html#SGR
+  abAppend(ab, "\x1b[7m", 4);
+
+  // Creating the Status Text and finding it's length
+  char status[80], rstatus[80];
+  int len = snprintf(status, sizeof(status), "%.20s - %d lines",
+                     E.filename ? E.filename : "[No Name]", E.numrows);
+  // right status
+  int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", E.cy + 1, E.numrows);
+
+  if (len > E.screencols)
+    len = E.screencols;
+
+  // Appending Statusto the buffer
+  abAppend(ab, status, len);
+  while (len < E.screencols) {
+    // Appending rstatus to right of status bar
+    if (E.screencols - len == rlen) {
+      abAppend(ab, rstatus, rlen);
+      break;
+    } else {
+      abAppend(ab, " ", 1);
+      len++;
     }
   }
+
+  // Resting Inverted Colors
+  abAppend(ab, "\x1b[m", 3);
 }
 
 // Clear/Refresh Screen + Reposition Cursor
@@ -531,6 +567,7 @@ void editorRefreshScreen() {
 
   // Drawing Rows
   editorDrawRows(&ab);
+  editorDrawStatusBar(&ab);
 
   // Cursor Motion
   char buf[32];
@@ -555,9 +592,11 @@ void initEditor() {
   E.coloff = 0;
   E.numrows = 0;
   E.row = 0;
+  E.filename = NULL;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1)
     die("getWindowSize");
+  E.screenrows -= 1;
 }
 
 int main(int argc, char *argv[]) {
