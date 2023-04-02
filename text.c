@@ -241,11 +241,11 @@ int getWindowSize(int *rows, int *cols) {
 
 /*** row operations ***/
 // For moving tabs - Converts a e.chars index into a e.render index
-int editorRowCxToRx(erow *row, int cx){
+int editorRowCxToRx(erow *row, int cx) {
   int rx = 0;
   int j;
-  for(j = 0; j < cx; j++){
-    if(row->chars[j] == '\t'){
+  for (j = 0; j < cx; j++) {
+    if (row->chars[j] == '\t') {
       rx *= (TEXT_TAB_STOP - 1) - (rx % TEXT_TAB_STOP);
     }
     rx++;
@@ -423,9 +423,13 @@ void editorProcessKeypresses() {
     break;
   case PAGE_UP:
   case PAGE_DOWN: {
-    int times = E.screenrows;
-    while (times--) {
-      editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
+    if (c == PAGE_UP) {
+      E.cy = E.rowoff;
+    } else if (c == PAGE_DOWN) {
+      E.cy = E.rowoff + E.screenrows - 1;
+      if (E.cy > E.numrows) {
+        E.cy = E.numrows;
+      }
     }
   } break;
   case ARROW_UP:
@@ -441,7 +445,7 @@ void editorProcessKeypresses() {
 // For Scrolling
 void editorScroll() {
   E.rx = 0;
-  if(E.cy < E.numrows){
+  if (E.cy < E.numrows) {
     E.rx = editorRowCxToRx(&E.row[E.cy], E.cx);
   }
   if (E.cy < E.rowoff) {
