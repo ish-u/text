@@ -54,6 +54,7 @@ struct editorConfig {
   int screencols;
   int numrows;
   erow *row; // Array of erow where each erow stores a line read from a file
+  int dirty;
   char *filename;
   char statusmsg[80];
   time_t statusmsg_time;
@@ -315,6 +316,8 @@ void editorAppendRow(char *s, size_t len) {
 
   // Incrementing the Row Count
   E.numrows++;
+
+  E.dirty++;
 }
 
 // Insert a char in erow
@@ -330,6 +333,8 @@ void editorRowInsertChar(erow *row, int at, int c) {
   row->size++;
   row->chars[at] = c;
   editorUpdateRow(row);
+  
+  E.dirty++;
 }
 
 /*** editor operations ***/
@@ -401,6 +406,7 @@ void editorOpen(char *filename) {
   }
   free(line);
   fclose(fp);
+  E.dirty = 0;
 }
 
 void editorSave() {
@@ -423,6 +429,8 @@ void editorSave() {
         close(fd);
         // freeing the allocated memory
         free(buf);
+        // Resetting Dirty buffer
+        E.dirty = 0;
         // Setting the Status that the file is saved
         editorSetStatusMessage("%d bytes written to disk", len);
         return;
@@ -636,8 +644,9 @@ void editorDrawStatusBar(struct abuf *ab) {
 
   // Creating the Status Text and finding it's length
   char status[80], rstatus[80];
-  int len = snprintf(status, sizeof(status), "%.20s - %d lines",
-                     E.filename ? E.filename : "[No Name]", E.numrows);
+  int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
+                     E.filename ? E.filename : "[No Name]", E.numrows,
+                     E.dirty ? "(modified)" : "");
   // right status
   int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", E.cy + 1, E.numrows);
 
@@ -740,6 +749,7 @@ void initEditor() {
   E.coloff = 0;
   E.numrows = 0;
   E.row = 0;
+  E.dirty = 0;
   E.filename = NULL;
   E.statusmsg[0] = '\0';
   E.statusmsg_time = 0;
