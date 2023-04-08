@@ -67,7 +67,7 @@ struct editorConfig E;
 /*** prototype ***/
 void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen();
-void *editorPrompt(char *prompt);
+char *editorPrompt(char *prompt, void (*callback)(char *, int));
 
 /*** terminal ***/
 // To Handle Errors
@@ -271,7 +271,7 @@ int editorRowCxToRx(erow *row, int cx) {
 int editorRowRxtoCx(erow *row, int rx) {
   // Current Render Index
   int cur_rx = 0;
-  // Loop through the chars string 
+  // Loop through the chars string
   // while maintaining curr_rx till we reach 'rx'
   int cx;
   for (cx = 0; cx < row->size; cx++) {
@@ -533,7 +533,7 @@ void editorOpen(char *filename) {
 
 void editorSave() {
   if (E.filename == NULL) {
-    E.filename = editorPrompt("Save as: %s (ESC to cancel)");
+    E.filename = editorPrompt("Save as: %s (ESC to cancel)", NULL);
     if (E.filename == NULL) {
       editorSetStatusMessage("Save aborted");
       return;
@@ -570,13 +570,10 @@ void editorSave() {
 }
 
 /*** find ***/
-void editorFind() {
-  // getting the query from User
-  char *query = editorPrompt("Search : %s (ESC to cancel)");
-  if (query == NULL) {
+void editorFindCallback(char *query, int key) {
+  if (key == '\r' || key == '\x1b') {
     return;
   }
-
   // looping through each erow till end or
   // we find a match
   int i;
@@ -595,8 +592,16 @@ void editorFind() {
       break;
     }
   }
+}
 
-  free(query);
+void editorFind() {
+  // getting the query from User 
+  // passing editorFindCallback function as a Callback Fucntion for
+  // Incremental Search
+  char *query = editorPrompt("Search : %s (ESC to cancel)", editorFindCallback);
+  if (query) {
+    free(query);
+  }
 }
 
 /*** append buffer ***/
@@ -627,7 +632,7 @@ void abFree(struct abuf *ab) { free(ab->b); }
 
 /*** input ***/
 // Editor prompt
-void *editorPrompt(char *prompt) {
+char *editorPrompt(char *prompt, void (*callback)(char *, int)) {
   size_t bufsize = 128;
   // user input
   char *buf = malloc(bufsize);
@@ -652,6 +657,9 @@ void *editorPrompt(char *prompt) {
     // ESCAPE to cancel the input promt
     else if (c == '\x1b') {
       editorSetStatusMessage("");
+      if (callback) {
+        callback(buf, c);
+      }
       free(buf);
       return NULL;
     }
@@ -659,6 +667,9 @@ void *editorPrompt(char *prompt) {
     else if (c == '\r') {
       if (buflen != 0) {
         editorSetStatusMessage("");
+        if (callback) {
+          callback(buf, c);
+        }
         return buf;
       }
     }
@@ -671,6 +682,10 @@ void *editorPrompt(char *prompt) {
       }
       buf[buflen++] = c;
       buf[buflen] = '\0';
+    }
+    // Calling the Callback Function
+    if (callback) {
+      callback(buf, c);
     }
   }
 }
@@ -990,7 +1005,8 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP : Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
+  editorSetStatusMessage(
+      "HELP : Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
 
   while (1) {
     editorRefreshScreen();
