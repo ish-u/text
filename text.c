@@ -5,6 +5,7 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -342,6 +343,38 @@ void editorInsertChar(int c) {
 }
 
 /*** file i/o ***/
+// Converting the erow struct array to string that can be written
+// to a file
+char *editorRowsToString(int *buflen) {
+  // total length of the Buffer - Sum of all chars of erow
+  int totlen = 0;
+
+  // adding 1 to each erow for '\n'
+  int j;
+  for (j = 0; j < E.numrows; j++) {
+    totlen += E.row[j].size + 1;
+  }
+  *buflen = totlen;
+
+  // allocating the memory for the whole buffer
+  char *buf = malloc(totlen);
+  // looping through each row and adding '\n' to each row
+  // and copying each row to the end of the buffer - 'buf'
+  // (using *p as a temp pointer)
+  char *p = buf;
+  for (j = 0; j < E.numrows; j++) {
+    // copying j-th row chars to pointer 'p' (our temp buffer)
+    memcpy(p, E.row[j].chars, E.row[j].size);
+    // offseting the pointer to end of the copied characters
+    p += E.row[j].size;
+    // writing new line at the end
+    *p = '\n';
+    p++;
+  }
+  // returning the buffer
+  return buf;
+}
+
 void editorOpen(char *filename) {
   // Storing File Name in editor config
   free(E.filename);
@@ -365,6 +398,27 @@ void editorOpen(char *filename) {
   }
   free(line);
   fclose(fp);
+}
+
+void editorSave() {
+  if (E.filename == NULL) {
+    return;
+  }
+
+  // getting the buffer and it's length
+  int len;
+  char *buf = editorRowsToString(&len);
+
+  // opening file
+  int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
+  // setting the file size to the buffer length
+  ftruncate(fd, len);
+  // writing the buffer to the file
+  write(fd, buf, len);
+  // closing the file
+  close(fd);
+  // freeing the allocated memory
+  free(buf);
 }
 
 /*** append buffer ***/
@@ -455,6 +509,9 @@ void editorProcessKeypresses() {
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
     exit(0);
+    break;
+  case CTRL_KEY('s'):
+    editorSave();
     break;
   case HOME_KEY:
     E.cx = 0;
