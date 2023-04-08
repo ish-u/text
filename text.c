@@ -62,6 +62,9 @@ struct editorConfig {
 
 struct editorConfig E;
 
+/*** prototype ***/
+void editorSetStatusMessage(const char *fmt, ...);
+
 /*** terminal ***/
 // To Handle Errors
 void die(const char *s) {
@@ -411,14 +414,25 @@ void editorSave() {
 
   // opening file
   int fd = open(E.filename, O_RDWR | O_CREAT, 0644);
-  // setting the file size to the buffer length
-  ftruncate(fd, len);
-  // writing the buffer to the file
-  write(fd, buf, len);
-  // closing the file
-  close(fd);
-  // freeing the allocated memory
+  if (fd != -1) {
+    // setting the file size to the buffer length
+    if (ftruncate(fd, len) != -1) {
+      // writing the buffer to the file
+      if (write(fd, buf, len) != -1) {
+        // closing the file
+        close(fd);
+        // freeing the allocated memory
+        free(buf);
+        // Setting the Status that the file is saved
+        editorSetStatusMessage("%d bytes written to disk", len);
+        return;
+      }
+    }
+    close(fd);
+  }
   free(buf);
+  // Setting the Status that the file didn't save correctly
+  editorSetStatusMessage("Can't save ! I/O error : %s", strerror(errno));
 }
 
 /*** append buffer ***/
@@ -742,7 +756,7 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP : Ctrl-Q = quit");
+  editorSetStatusMessage("HELP : Ctrl-S = save | Ctrl-Q = quit");
 
   while (1) {
     editorRefreshScreen();
