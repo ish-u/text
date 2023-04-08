@@ -23,6 +23,7 @@
 #define CTRL_KEY(k) ((k)&0x1f)
 
 enum editorKey {
+  BACKSPACE = 127,
   ARROW_LEFT = 1000,
   ARROW_RIGHT,
   ARROW_UP,
@@ -334,7 +335,7 @@ void editorInsertChar(int c) {
     // inserting a new row because the editor is at the EOF on tilde line
     editorAppendRow("", 0);
   }
-  // inserting a new character at cusror position (E.cx,E,cy) 
+  // inserting a new character at cusror position (E.cx,E,cy)
   editorRowInsertChar(&E.row[E.cy], E.cx, c);
   // moving cursor forward after inserting the character
   E.cx++;
@@ -446,6 +447,9 @@ void editorProcessKeypresses() {
   int c = editorReadKey();
 
   switch (c) {
+  case '\r':
+    // TODO
+    break;
   case CTRL_KEY('q'):
     // Clearing the Screen and Repositioning Cursor on Exit
     write(STDOUT_FILENO, "\x1b[2J", 4);
@@ -459,6 +463,11 @@ void editorProcessKeypresses() {
     if (E.cy < E.numrows) {
       E.cx = E.row[E.cy].size;
     }
+    break;
+  case BACKSPACE:
+  case CTRL_KEY('h'):
+  case DEL_KEY:
+    // TODO
     break;
   case PAGE_UP:
   case PAGE_DOWN: {
@@ -478,9 +487,13 @@ void editorProcessKeypresses() {
   case ARROW_RIGHT:
     editorMoveCursor(c);
     break;
+
+  case CTRL_KEY('l'):
+  case '\x1b':
+    break;
   default:
-      editorInsertChar(c);
-      break;
+    editorInsertChar(c);
+    break;
   }
 }
 
