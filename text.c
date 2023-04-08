@@ -312,6 +312,34 @@ void editorAppendRow(char *s, size_t len) {
   E.numrows++;
 }
 
+// Insert a char in erow
+void editorRowInsertChar(erow *row, int at, int c) {
+  if (at < 0 || at > row->size) {
+    at = row->size;
+  }
+  // allocating 1 byte for new character (1 for new char + 1 for NULL)
+  row->chars = realloc(row->chars, row->size + 2);
+  // moves characters from at to at+1 so we can insert new chracter
+  memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+  // inserting 'c'
+  row->size++;
+  row->chars[at] = c;
+  editorUpdateRow(row);
+}
+
+/*** editor operations ***/
+void editorInsertChar(int c) {
+
+  if (E.cy == E.numrows) {
+    // inserting a new row because the editor is at the EOF on tilde line
+    editorAppendRow("", 0);
+  }
+  // inserting a new character at cusror position (E.cx,E,cy) 
+  editorRowInsertChar(&E.row[E.cy], E.cx, c);
+  // moving cursor forward after inserting the character
+  E.cx++;
+}
+
 /*** file i/o ***/
 void editorOpen(char *filename) {
   // Storing File Name in editor config
@@ -450,6 +478,9 @@ void editorProcessKeypresses() {
   case ARROW_RIGHT:
     editorMoveCursor(c);
     break;
+  default:
+      editorInsertChar(c);
+      break;
   }
 }
 
