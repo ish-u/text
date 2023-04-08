@@ -66,6 +66,8 @@ struct editorConfig E;
 
 /*** prototype ***/
 void editorSetStatusMessage(const char *fmt, ...);
+void editorRefreshScreen();
+void *editorPrompt(char *prompt);
 
 /*** terminal ***/
 // To Handle Errors
@@ -510,7 +512,11 @@ void editorOpen(char *filename) {
 
 void editorSave() {
   if (E.filename == NULL) {
-    return;
+    E.filename = editorPrompt("Save as: %s (ESC to cancel)");
+    if (E.filename == NULL) {
+      editorSetStatusMessage("Save aborted");
+      return;
+    }
   }
 
   // getting the buffer and it's length
@@ -569,6 +575,55 @@ void abAppend(struct abuf *ab, const char *s, int len) {
 void abFree(struct abuf *ab) { free(ab->b); }
 
 /*** input ***/
+// Editor prompt
+void *editorPrompt(char *prompt) {
+  size_t bufsize = 128;
+  // user input
+  char *buf = malloc(bufsize);
+
+  size_t buflen = 0;
+  buf[0] = '\0';
+
+  // Loop till the user enters the file name
+  while (1) {
+    // showing the user prompt
+    editorSetStatusMessage(prompt, buf);
+    editorRefreshScreen();
+
+    // reading the user input
+    int c = editorReadKey();
+    // delete characters from prompt
+    if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE) {
+      if (buflen != 0) {
+        buf[--buflen] = '\0';
+      }
+    }
+    // ESCAPE to cancel the input promt
+    else if (c == '\x1b') {
+      editorSetStatusMessage("");
+      free(buf);
+      return NULL;
+    }
+    // if user presses ENTER and the buflen is not zero return it - filename
+    else if (c == '\r') {
+      if (buflen != 0) {
+        editorSetStatusMessage("");
+        return buf;
+      }
+    }
+    // appending the read character to buf
+    else if (!iscntrl(c) && c < 128) {
+      // re-sizing buf if the entered prompt exceeds bufsize
+      if (buflen == bufsize - 1) {
+        bufsize *= 2;
+        buf = realloc(buf, bufsize);
+      }
+      buf[buflen++] = c;
+      buf[buflen] = '\0';
+    }
+  }
+}
+
 // Handle Cursor Motion
 void editorMoveCursor(int key) {
   erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
