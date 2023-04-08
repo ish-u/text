@@ -321,6 +321,26 @@ void editorAppendRow(char *s, size_t len) {
   E.dirty++;
 }
 
+// free a row
+void editorFreeRow(erow *row) {
+  free(row->render);
+  free(row->chars);
+}
+
+// Delete a erow
+void editorDelRow(int at) {
+  // validating the index
+  if (at < 0 || at >= E.numrows) {
+    return;
+  }
+  // free the memory used by erow on index 'at'
+  editorFreeRow(&E.row[at]);
+  // rewrite the all rows after index 'at'
+  memmove(&E.row[at], &E.row[at + 1], sizeof(erow) * (E.numrows - at - 1));
+  E.numrows--;
+  E.dirty++;
+}
+
 // Insert a char in erow
 void editorRowInsertChar(erow *row, int at, int c) {
   if (at < 0 || at > row->size) {
@@ -333,6 +353,19 @@ void editorRowInsertChar(erow *row, int at, int c) {
   // inserting 'c'
   row->size++;
   row->chars[at] = c;
+  editorUpdateRow(row);
+  E.dirty++;
+}
+
+// Append a string to row
+void editorRowAppendString(erow *row, char *s, size_t len) {
+  // creating space for the string to be appended to row
+  row->chars = realloc(row->chars, row->size + len + 1);
+  // copying the string
+  memcpy(&row->chars[row->size], s, len);
+  row->size += len;
+  row->chars[row->size] = '\0';
+  // udpating row
   editorUpdateRow(row);
   E.dirty++;
 }
@@ -368,6 +401,10 @@ void editorDelChar() {
   if (E.cy == E.numrows) {
     return;
   }
+  // nothing to delete if the cursor is at the beginning of the line
+  if (E.cx == 0 && E.cy == 0) {
+    return;
+  }
 
   // getting the current row
   erow *row = &E.row[E.cy];
@@ -376,6 +413,15 @@ void editorDelChar() {
   if (E.cx > 0) {
     editorRowDelChar(row, E.cx - 1);
     E.cx--;
+  }
+  else {
+    // Set Cursor's col to above line's end
+    E.cx = E.row[E.cy - 1].size;
+    // appending the current row's chars to the end of previous row
+    editorRowAppendString(&E.row[E.cy - 1], row->chars, row->size);
+    editorDelRow(E.cy);
+    // Set Cursor's row to above row
+    E.cy--;
   }
 }
 
