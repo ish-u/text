@@ -267,6 +267,27 @@ int editorRowCxToRx(erow *row, int cx) {
   return rx;
 }
 
+// Convertes the e.render index into e.chars index
+int editorRowRxtoCx(erow *row, int rx) {
+  // Current Render Index
+  int cur_rx = 0;
+  // Loop through the chars string 
+  // while maintaining curr_rx till we reach 'rx'
+  int cx;
+  for (cx = 0; cx < row->size; cx++) {
+    // increment curr_rx accordingly on finding that a character is TAB
+    if (row->chars[cx] == '\t') {
+      cur_rx += (TEXT_TAB_STOP - 1) - (cur_rx % TEXT_TAB_STOP);
+    }
+    cur_rx++;
+
+    if (cur_rx > rx) {
+      return cx;
+    }
+  }
+  return cx;
+}
+
 // For Rendering Special Characters
 void editorUpdateRow(erow *row) {
   // Counting the number of tabs in the row
@@ -548,6 +569,36 @@ void editorSave() {
   editorSetStatusMessage("Can't save ! I/O error : %s", strerror(errno));
 }
 
+/*** find ***/
+void editorFind() {
+  // getting the query from User
+  char *query = editorPrompt("Search : %s (ESC to cancel)");
+  if (query == NULL) {
+    return;
+  }
+
+  // looping through each erow till end or
+  // we find a match
+  int i;
+  for (i = 0; i < E.numrows; i++) {
+    // i-th erow
+    erow *row = &E.row[i];
+    // fining the match
+    char *match = strstr(row->render, query);
+    // if we found a match we move the Cursor Position to the match posiionn
+    if (match) {
+      E.cy = i;
+      // setting cursor 'x' to be the Offset to match pointer position
+      E.cx = editorRowRxtoCx(row, match - row->render);
+      // Setting rowOff to EOF makes E.rowOff = E.cy in editorScroll
+      E.rowoff = E.numrows;
+      break;
+    }
+  }
+
+  free(query);
+}
+
 /*** append buffer ***/
 struct abuf {
   char *b;
@@ -705,6 +756,9 @@ void editorProcessKeypresses() {
     if (E.cy < E.numrows) {
       E.cx = E.row[E.cy].size;
     }
+    break;
+  case CTRL_KEY('f'):
+    editorFind();
     break;
   case BACKSPACE:
   case CTRL_KEY('h'):
@@ -936,7 +990,7 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP : Ctrl-S = save | Ctrl-Q = quit");
+  editorSetStatusMessage("HELP : Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
 
   while (1) {
     editorRefreshScreen();
