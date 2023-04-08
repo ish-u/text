@@ -294,12 +294,13 @@ void editorUpdateRow(erow *row) {
   row->rsize = idx;
 }
 
-void editorAppendRow(char *s, size_t len) {
+// Insert a new Row
+void editorInsertRow(int at, char *s, size_t len) {
   // Reallocate(Resize Memory Block) to accomadate a new erow in E.row array
   E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+  // shufting all the erow from 'at' index to 'at+1' index
+  memmove(&E.row[at + 1], &E.row[at], sizeof(erow) * (E.numrows - at));
 
-  // index of the new element of E.row array
-  int at = E.numrows;
   // Setting the Size of Line in a Row
   E.row[at].size = len;
   // Allocating Memory for Character of the Line in a Row
@@ -388,12 +389,36 @@ void editorInsertChar(int c) {
 
   if (E.cy == E.numrows) {
     // inserting a new row because the editor is at the EOF on tilde line
-    editorAppendRow("", 0);
+    editorInsertRow(E.numrows, "", 0);
   }
   // inserting a new character at cusror position (E.cx,E,cy)
   editorRowInsertChar(&E.row[E.cy], E.cx, c);
   // moving cursor forward after inserting the character
   E.cx++;
+}
+
+// Insert a New Line
+void editorInsertNewLine() {
+  // Insert an Empty line if at the beginning of the Line
+  if (E.cx == 0) {
+    editorInsertRow(E.cy, "", 0);
+  }
+  // Spilting the Row at cursor's x (E.cx) into two Rows
+  else {
+    erow *row = &E.row[E.cy];
+    // Inserting a new row after E.cy with contents to right of E.cx
+    editorInsertRow(E.cy + 1, &row->chars[E.cx], row->size - E.cx);
+    // Getting the Current Row Pointer
+    row = &E.row[E.cy];
+    // Resetting the Size of Current Row
+    row->size = E.cx;
+    // Adding NULL to the end
+    row->chars[row->size] = '\0';
+    editorUpdateRow(row);
+  }
+  // Moving to the Start of the Inserted Line
+  E.cy++;
+  E.cx = 0;
 }
 
 void editorDelChar() {
@@ -413,8 +438,7 @@ void editorDelChar() {
   if (E.cx > 0) {
     editorRowDelChar(row, E.cx - 1);
     E.cx--;
-  }
-  else {
+  } else {
     // Set Cursor's col to above line's end
     E.cx = E.row[E.cy - 1].size;
     // appending the current row's chars to the end of previous row
@@ -477,7 +501,7 @@ void editorOpen(char *filename) {
            (line[linelen - 1] == '\n' || line[linelen - 1] == '\r')) {
       linelen--;
     }
-    editorAppendRow(line, linelen);
+    editorInsertRow(E.numrows, line, linelen);
   }
   free(line);
   fclose(fp);
@@ -601,7 +625,7 @@ void editorProcessKeypresses() {
 
   switch (c) {
   case '\r':
-    // TODO
+    editorInsertNewLine();
     break;
   case CTRL_KEY('q'):
     if (E.dirty && quit_times > 0) {

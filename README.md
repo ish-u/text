@@ -1,12 +1,18 @@
+
 # text
-thiss is a test let's se if this saved
+thiss is a
+ test let's se if this saved
+
+
 a text editor
+
 a text editoraaa
 a text editor
 a text editoraaaaadsa
 a tedadaxt editor
 a   text editor - - - -- - - -- - - - -
-      a text editor - - - -- - - -- - - - -----------------------------------------------------------------------------------------
+      a text editor - - - -- - - --
+ - - - -----------------------------------------------------------------------------------------
 a text editor
 a text editor - - - -- - - -- - - - -----------------------------------------------------------------------------------------
 a text editor - - - -- - - -- - - - -----------------------------------------------------------------------------------------
@@ -55,3 +61,5 @@ a text editor
 a text editor - - - -- - - -- - - - -
 a text editor - - - -- - - -- - - - -----------------------------------------------------------------------------------------
 added error handling
+
+
