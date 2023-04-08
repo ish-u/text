@@ -334,7 +334,19 @@ void editorRowInsertChar(erow *row, int at, int c) {
   row->size++;
   row->chars[at] = c;
   editorUpdateRow(row);
+  E.dirty++;
+}
 
+// Delete char in erow
+void editorRowDelChar(erow *row, int at) {
+  if (at < 0 || at >= row->size) {
+    return;
+  }
+
+  // move the chracters from at+1 to at -> removing the character
+  memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
+  row->size--;
+  editorUpdateRow(row);
   E.dirty++;
 }
 
@@ -349,6 +361,22 @@ void editorInsertChar(int c) {
   editorRowInsertChar(&E.row[E.cy], E.cx, c);
   // moving cursor forward after inserting the character
   E.cx++;
+}
+
+void editorDelChar() {
+  // nothing to delete at EOF
+  if (E.cy == E.numrows) {
+    return;
+  }
+
+  // getting the current row
+  erow *row = &E.row[E.cy];
+  // get the row the cursor is on
+  // and if there is character left to cursor delete it
+  if (E.cx > 0) {
+    editorRowDelChar(row, E.cx - 1);
+    E.cx--;
+  }
 }
 
 /*** file i/o ***/
@@ -556,7 +584,11 @@ void editorProcessKeypresses() {
   case BACKSPACE:
   case CTRL_KEY('h'):
   case DEL_KEY:
-    // TODO
+    // DEL_KEY deletes characters to the right of cursor
+    if (c == DEL_KEY) {
+      editorMoveCursor(ARROW_RIGHT);
+    }
+    editorDelChar();
     break;
   case PAGE_UP:
   case PAGE_DOWN: {
@@ -585,6 +617,7 @@ void editorProcessKeypresses() {
     break;
   }
 
+  // Restting Quit Times if any other key then Ctrl-Q is pressed
   quit_times = TEXT_QUIT_TIMES;
 }
 
