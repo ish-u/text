@@ -19,6 +19,7 @@
 /*** defines ***/
 #define TEXT_VERSION "0.0.1"
 #define TEXT_TAB_STOP 8
+#define TEXT_QUIT_TIMES 3
 // All Ctrl + k operations results in 0x[ASCII_CODE_IN_HEX] & 0x1f
 // Ctrl + Q = 0x17 => 0b01110001 & 0b00011111 = 0b00010001 = 0x17
 #define CTRL_KEY(k) ((k)&0x1f)
@@ -333,7 +334,7 @@ void editorRowInsertChar(erow *row, int at, int c) {
   row->size++;
   row->chars[at] = c;
   editorUpdateRow(row);
-  
+
   E.dirty++;
 }
 
@@ -520,6 +521,8 @@ void editorMoveCursor(int key) {
 }
 // Handle the KeyPress
 void editorProcessKeypresses() {
+  static int quit_times = TEXT_QUIT_TIMES;
+
   int c = editorReadKey();
 
   switch (c) {
@@ -527,6 +530,12 @@ void editorProcessKeypresses() {
     // TODO
     break;
   case CTRL_KEY('q'):
+    if (E.dirty && quit_times > 0) {
+      editorSetStatusMessage("WARNING!! File has unsaved changes. ""Press Ctrl-Q %d more times to quit.",
+                             quit_times);
+      quit_times--;
+      return;
+    }
     // Clearing the Screen and Repositioning Cursor on Exit
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
@@ -574,6 +583,8 @@ void editorProcessKeypresses() {
     editorInsertChar(c);
     break;
   }
+
+  quit_times = TEXT_QUIT_TIMES;
 }
 
 /*** output ***/
