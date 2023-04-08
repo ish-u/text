@@ -571,20 +571,54 @@ void editorSave() {
 
 /*** find ***/
 void editorFindCallback(char *query, int key) {
+  // For moving forward and backward between multiple search occurences
+  // *static variables are only initialised once*
+  static int last_match = -1; // index of the last matched row
+  static int direction = 1; // direction of search 1 -> Forward  -1 -> Backward
+
   if (key == '\r' || key == '\x1b') {
+    last_match = -1;
+    direction = 1;
     return;
   }
+  // Setting the Direction Based on Arrow Keys
+  else if (key == ARROW_RIGHT || key == ARROW_DOWN) {
+    direction = 1;
+  } else if (key == ARROW_LEFT || key == ARROW_UP) {
+    direction = -1;
+  } else {
+    last_match = -1;
+    direction = 1;
+  }
+
+  if (last_match == -1) {
+    direction = 1;
+  }
+  // index of the row we are searching
+  int current = last_match;
+
   // looping through each erow till end or
   // we find a match
   int i;
   for (i = 0; i < E.numrows; i++) {
-    // i-th erow
-    erow *row = &E.row[i];
+    // incrementing the current value in 'direction' 
+    // till we find the next occurence of query
+    current += direction;
+    // To Wrap the whole file
+    if (current == -1) {
+      current = E.numrows - 1;
+    } else if (current == E.numrows) {
+      current = 0;
+    }
+    // current erow
+    erow *row = &E.row[current];
     // fining the match
     char *match = strstr(row->render, query);
     // if we found a match we move the Cursor Position to the match posiionn
     if (match) {
-      E.cy = i;
+      // saving the current row as the last_matched value row index
+      last_match = current;
+      E.cy = current;
       // setting cursor 'x' to be the Offset to match pointer position
       E.cx = editorRowRxtoCx(row, match - row->render);
       // Setting rowOff to EOF makes E.rowOff = E.cy in editorScroll
@@ -595,12 +629,25 @@ void editorFindCallback(char *query, int key) {
 }
 
 void editorFind() {
-  // getting the query from User 
+  // saving the current cursor position
+  int saved_cx = E.cx;
+  int saved_cy = E.cy;
+  int saved_coloff = E.coloff;
+  int saved_rowoff = E.rowoff;
+
+  // getting the query from User
   // passing editorFindCallback function as a Callback Fucntion for
   // Incremental Search
-  char *query = editorPrompt("Search : %s (ESC to cancel)", editorFindCallback);
+  char *query =
+      editorPrompt("Search : %s (Use ESC/Arrows/Enter)", editorFindCallback);
   if (query) {
     free(query);
+  } else {
+    // Restoring the Cursor Position
+    E.cx = saved_cx;
+    E.cy = saved_cy;
+    E.coloff = saved_coloff;
+    E.rowoff = saved_rowoff;
   }
 }
 
